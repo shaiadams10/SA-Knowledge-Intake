@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.pyc
+.knowledge-intake/
+.impeccable/
+.pytest_cache/
