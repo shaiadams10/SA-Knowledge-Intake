@@ -7,7 +7,7 @@ Only the `package/` directory is intended for downstream import into knowledge b
 ```text
 package/
   articles/
-    knowledge-<public-id>.md
+    <readable-ascii-title>--<8-character-public-id>.md
   manifest.jsonl
   package.json
   README.md
@@ -39,13 +39,15 @@ Do not pre-split into tiny arbitrary fragments. Downstream retrieval systems can
   "document_id": "6dbfa2c5d96e2ca1",
   "title": "Example guide",
   "language": "en",
-  "path": "articles/knowledge-6dbfa2c5d96e2ca1.md",
+  "path": "articles/example-guide--6dbfa2c5.md",
   "sha256": "...",
   "word_count": 842
 }
 ```
 
-The public document ID is clean and source-neutral. Original provenance is preserved in internal manifests.
+The public document ID is clean and source-neutral. Original provenance is preserved in internal manifests. Article filenames combine a lowercase ASCII title slug with the first eight characters of that stable ID, for example `plant-vs-animal-protein--4df9b891.md`. The full ID remains authoritative in `document_id`; filenames are readable transport labels, not identity keys. If a title has no ASCII representation, use `knowledge` as the portable fallback slug.
+
+Regenerating a package applies this convention only to that newly generated package. It does not rename files in earlier packages or documents already imported into a downstream knowledge base. Consumers must use `manifest.jsonl` document IDs and digests, rather than filenames alone, for incremental identity and update decisions.
 
 ## Import Behavior
 

@@ -118,6 +118,14 @@ def unicode_slug(value: str, limit: int = 72) -> str:
     return cleaned[:limit].strip("-") or "general"
 
 
+def portable_article_slug(value: str, limit: int = 80) -> str:
+    """Return a readable ASCII filename stem that is safe across platforms."""
+    normalized = unicodedata.normalize("NFKD", value or "")
+    ascii_value = normalized.encode("ascii", "ignore").decode("ascii").lower()
+    cleaned = re.sub(r"[^a-z0-9]+", "-", ascii_value).strip("-")
+    return cleaned[:limit].rstrip("-") or "knowledge"
+
+
 def clean_url(url: str) -> str:
     parts = urllib.parse.urlsplit(url)
     query = [(k, v) for k, v in urllib.parse.parse_qsl(parts.query) if not k.lower().startswith(("utm_", "fbclid", "gclid"))]
@@ -699,7 +707,7 @@ def package(path: Path) -> Path:
         if content_hash in seen:
             continue
         seen.add(content_hash)
-        filename = f"knowledge-{doc['public_id']}.md"
+        filename = f"{portable_article_slug(doc['title'])}--{doc['public_id'][:8]}.md"
         atomic_text(articles / filename, content)
         manifest.append({
             "schema_version": "markdown-document-v1", "run_name": run["run_name"],

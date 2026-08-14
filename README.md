@@ -21,7 +21,7 @@ Knowledge Intake is a portable, deterministic, and interactive intake pipeline d
 - 🎯 **Collect Only What Matters**: Crawl4AI renders and extracts *only* your chosen sections, ignoring hundreds of media/upload/utility files.
 - 🧹 **Deterministic Cleanup Pipeline**: Multi-pass boilerplate removal strips navigation menus, repeated site slogans, bylines, contact cards, promo banners, and marketing footers.
 - 🤖 **Agentic Review Queue (Zero Local LLM)**: Visual interpretations, scanned PDFs, and sensitive domain claims route to the active coding agent for review instead of spinning up costly local models.
-- 📦 **Structured Knowledge Packages**: Produces standardized, single-H1 UTF-8 Markdown articles with cryptographic SHA-256 manifests and package declarations conforming to `markdown-knowledge-v1`.
+- 📦 **Structured Knowledge Packages**: Produces standardized, single-H1 UTF-8 Markdown articles with readable portable names such as `plant-vs-animal-protein--4df9b891.md`, cryptographic SHA-256 manifests, and package declarations conforming to `markdown-knowledge-v1`.
 
 ---
 

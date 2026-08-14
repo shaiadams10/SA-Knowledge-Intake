@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from intake_engine import (  # noqa: E402
     apply_agent, basic_clean, package, prepare_agent, read_jsonl, save_selection,
-    start, validate, write_jsonl,
+    portable_article_slug, start, validate, write_jsonl,
 )
 
 
@@ -44,7 +44,15 @@ class IntakeV2Tests(unittest.TestCase):
         target = package(path)
         result = validate(path)
         self.assertTrue(result["healthy"], result["errors"])
-        self.assertEqual(read_jsonl(target / "manifest.jsonl")[0]["schema_version"], "markdown-document-v1")
+        manifest = read_jsonl(target / "manifest.jsonl")[0]
+        self.assertEqual(manifest["schema_version"], "markdown-document-v1")
+        self.assertRegex(manifest["path"], r"^articles/practical-source-organization--[0-9a-f]{8}\.md$")
+        self.assertEqual(manifest["document_id"][:8], Path(manifest["path"]).stem.rsplit("--", 1)[1])
+
+    def test_portable_article_slug_is_ascii_readable_and_has_safe_fallback(self) -> None:
+        self.assertEqual(portable_article_slug("Plant vs. Animal Protein"), "plant-vs-animal-protein")
+        self.assertEqual(portable_article_slug("Crème brûlée: a guide"), "creme-brulee-a-guide")
+        self.assertEqual(portable_article_slug("חלבונים מהצומח"), "knowledge")
 
     def test_cleanup_removes_byline_contact_and_promotion(self) -> None:
         dirty = INFORMATION + "\nBy: Example Person\nCall +1 212 555 0188\nSubscribe for a special offer\n"

@@ -88,7 +88,7 @@ uv run --project $env:INTAKE_HOME python "$env:INTAKE_HOME/scripts/intake.py" va
 
 Hand off `.knowledge-intake/runs/<source-name>/package/`. Its contract is documented in `references/package-contract.md`:
 
-- `articles/*.md`: UTF-8, one top-level H1, structured headings and paragraphs, no frontmatter, raw HTML, broken images, source branding, contacts, promotions, or diagnostics.
+- `articles/*.md`: UTF-8, one top-level H1, structured headings and paragraphs, no frontmatter, raw HTML, broken images, source branding, contacts, promotions, or diagnostics. New packages use portable readable filenames such as `plant-vs-animal-protein--4df9b891.md`; the manifest's full `document_id` remains the stable identity.
 - `manifest.jsonl`: one integrity row per Markdown document with SHA-256 digests.
 - `package.json`: schema, run details, counts, and compatibility declaration.
 
