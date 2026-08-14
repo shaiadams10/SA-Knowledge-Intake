@@ -4,6 +4,8 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import threading
+import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -13,6 +15,12 @@ from intake_engine import (
     package, prepare_agent, public_state, read_jsonl, run_path, save_selection,
     select_patterns, start, validate,
 )
+
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if sys.stderr and hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
+
 
 
 def parser() -> argparse.ArgumentParser:
@@ -33,6 +41,7 @@ def parser() -> argparse.ArgumentParser:
     serve.add_argument("name")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8765)
+    serve.add_argument("--idle-timeout", type=int, default=900, help="Seconds of inactivity before auto-shutdown (0 to disable, default 900)")
     serve.add_argument("--open", action="store_true")
     choose = commands.add_parser("select")
     choose.add_argument("name")
@@ -64,7 +73,27 @@ def emit(value: object, as_json: bool = True) -> None:
     print(json.dumps(value, ensure_ascii=False, indent=2) if as_json else str(value))
 
 
-def serve_report(path: Path, host: str, port: int, open_browser: bool) -> None:
+class ResilientHTTPServer(ThreadingHTTPServer):
+    allow_reuse_address = False
+
+
+def find_available_server(host: str, initial_port: int, handler_cls: type[BaseHTTPRequestHandler], max_tries: int = 20) -> tuple[ThreadingHTTPServer, int]:
+    for offset in range(max_tries):
+        port = initial_port + offset
+        try:
+            server = ResilientHTTPServer((host, port), handler_cls)
+            return server, port
+        except OSError as exc:
+            if offset == max_tries - 1:
+                raise exc
+    raise OSError(f"Could not bind to any port in range {initial_port}..{initial_port + max_tries - 1}")
+
+
+def serve_report(path: Path, host: str, port: int, open_browser: bool, idle_timeout: int = 900) -> None:
+    last_activity = [time.time()]
+    active_clients: dict[str, float] = {}
+    is_shutting_down = threading.Event()
+
     class Handler(BaseHTTPRequestHandler):
         def _send(self, status: int, content_type: str, body: bytes) -> None:
             self.send_response(status)
@@ -75,6 +104,7 @@ def serve_report(path: Path, host: str, port: int, open_browser: bool) -> None:
             self.wfile.write(body)
 
         def do_GET(self) -> None:  # noqa: N802
+            last_activity[0] = time.time()
             if self.path in {"/", "/report.html"}:
                 self._send(200, "text/html; charset=utf-8", (path / "report.html").read_bytes())
             elif self.path == "/fonts/barlow-condensed-latin.woff2":
@@ -85,25 +115,73 @@ def serve_report(path: Path, host: str, port: int, open_browser: bool) -> None:
                 self._send(404, "text/plain; charset=utf-8", b"Not found")
 
         def do_POST(self) -> None:  # noqa: N802
-            if self.path != "/api/select":
+            last_activity[0] = time.time()
+            if self.path == "/api/select":
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                    payload = json.loads(self.rfile.read(min(length, 2_000_000)))
+                    run = save_selection(path, list(payload.get("urls") or []))
+                    body = json.dumps(public_state(path, run), ensure_ascii=False).encode()
+                    self._send(200, "application/json; charset=utf-8", body)
+                except Exception as exc:
+                    self._send(400, "application/json; charset=utf-8", json.dumps({"error": str(exc)}).encode())
+            elif self.path == "/api/heartbeat":
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                    payload = json.loads(self.rfile.read(min(length, 10_000))) if length > 0 else {}
+                    client_id = str(payload.get("client_id") or "anonymous")
+                    active_clients[client_id] = time.time()
+                except Exception:
+                    pass
+                self._send(200, "application/json; charset=utf-8", json.dumps({"ok": True, "idle_timeout": idle_timeout}).encode())
+            elif self.path == "/api/leave":
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                    payload = json.loads(self.rfile.read(min(length, 10_000))) if length > 0 else {}
+                    client_id = str(payload.get("client_id") or "")
+                    if client_id in active_clients:
+                        del active_clients[client_id]
+                except Exception:
+                    pass
+                self._send(200, "application/json; charset=utf-8", json.dumps({"ok": True}).encode())
+            elif self.path == "/api/shutdown":
+                self._send(200, "application/json; charset=utf-8", json.dumps({"ok": True, "message": "Server shutting down."}).encode())
+                is_shutting_down.set()
+                threading.Thread(target=server.shutdown, daemon=True).start()
+            else:
                 self._send(404, "text/plain", b"Not found")
-                return
-            try:
-                length = int(self.headers.get("Content-Length", "0"))
-                payload = json.loads(self.rfile.read(min(length, 2_000_000)))
-                run = save_selection(path, list(payload.get("urls") or []))
-                body = json.dumps(public_state(path, run), ensure_ascii=False).encode()
-                self._send(200, "application/json; charset=utf-8", body)
-            except Exception as exc:
-                self._send(400, "application/json; charset=utf-8", json.dumps({"error": str(exc)}).encode())
 
         def log_message(self, format: str, *args: object) -> None:
             return
 
-    server = ThreadingHTTPServer((host, port), Handler)
-    url = f"http://{host}:{port}/"
+    server, bound_port = find_available_server(host, port, Handler)
+    url = f"http://{host}:{bound_port}/"
     print(f"Live intake report: {url}")
-    print("Press Ctrl+C to stop the report server; the intake run is preserved.")
+    if bound_port != port:
+        print(f"(Port {port} was in use; automatically bound to port {bound_port})")
+    if idle_timeout > 0:
+        print(f"Auto-shutdown: Server will stop after {idle_timeout}s of inactivity if all tabs are closed.")
+    print("Press Ctrl+C or click 'Close Server' in the dashboard to stop; the intake run is preserved.")
+
+    def monitor_idle() -> None:
+        while not is_shutting_down.is_set():
+            time.sleep(2)
+            if is_shutting_down.is_set():
+                break
+            now_ts = time.time()
+            stale_keys = [k for k, v in active_clients.items() if now_ts - v > 35]
+            for k in stale_keys:
+                del active_clients[k]
+
+            if idle_timeout > 0 and (now_ts - last_activity[0]) > idle_timeout:
+                print(f"\nDashboard server stopped automatically after {idle_timeout}s of inactivity.", flush=True)
+                is_shutting_down.set()
+                threading.Thread(target=server.shutdown, daemon=True).start()
+                break
+
+    monitor_thread = threading.Thread(target=monitor_idle, daemon=True)
+    monitor_thread.start()
+
     if open_browser:
         webbrowser.open(url)
     try:
@@ -111,6 +189,7 @@ def serve_report(path: Path, host: str, port: int, open_browser: bool) -> None:
     except KeyboardInterrupt:
         pass
     finally:
+        is_shutting_down.set()
         server.server_close()
 
 
@@ -133,7 +212,7 @@ def main() -> int:
         if args.command == "status":
             emit(public_state(path))
         elif args.command == "serve":
-            serve_report(path, args.host, args.port, args.open)
+            serve_report(path, args.host, args.port, args.open, idle_timeout=args.idle_timeout)
         elif args.command == "select":
             if not args.include and not args.recommended:
                 raise ValueError("Use --include PATTERN or --recommended.")

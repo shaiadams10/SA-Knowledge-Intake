@@ -13,7 +13,7 @@ Treat these as explicit invocations:
 
 ```text
 intake: https://example.com
-intake: D:\Sources\guide.pdf
+intake: ./sources/guide.pdf
 $knowledge-intake https://example.com
 ```
 
@@ -29,7 +29,7 @@ uv run --project $env:INTAKE_HOME python "$env:INTAKE_HOME/scripts/intake.py" do
 
 If Crawl4AI's browser is missing, run the setup command printed by `doctor`.
 
-## 2. Inventory first
+## 2. Inventory first (Websites require human selection)
 
 ```powershell
 uv run --project $env:INTAKE_HOME python "$env:INTAKE_HOME/scripts/intake.py" start <SOURCE>
@@ -37,23 +37,26 @@ uv run --project $env:INTAKE_HOME python "$env:INTAKE_HOME/scripts/intake.py" st
 
 Runs live under `.knowledge-intake/runs/<source-name>/`, for example `.knowledge-intake/runs/example-com/` or `.knowledge-intake/runs/guide/`.
 
-For a website, `start` performs a fast sitemap/link inventory only. It does not render every page. Start the live report:
+### For Website Sources:
+1. `start` performs a fast sitemap/link inventory only. It does not render every page.
+2. Launch the interactive proof-sheet report:
 
 ```powershell
 uv run --project $env:INTAKE_HOME python "$env:INTAKE_HOME/scripts/intake.py" serve <source-name> --open
 ```
 
-The user selects relevant sections or pages in the report and presses **Save selection**. The report writes the selection directly into the run; it polls compact JSON state, so progress updates do not consume model tokens.
+3. **CRITICAL STOP DIRECTIVE**: After running `serve --open`, you **MUST STOP calling tools immediately** and yield the turn to the user. Output the dashboard URL (e.g. `http://127.0.0.1:8765/`) and instruct the user to review the endpoints, click **Save selection**, and confirm when ready.
+4. **DO NOT** autonomously run `select` or `collect` in the same turn, even if the input URL contained a specific subpath.
+5. **DO NOT** use CLI `select` (`--include`) unless the user explicitly requested a headless/automated batch run without an interactive UI.
 
-If an interactive browser is unavailable, select with URL/path patterns:
+The dashboard server automatically handles port conflicts (rebinding to 8766+ if 8765 is busy) and auto-shuts down after 15 minutes of inactivity or when the user clicks **Close Server**. Saved selections are stored permanently in `selection.json`.
 
-```powershell
-uv run --project $env:INTAKE_HOME python "$env:INTAKE_HOME/scripts/intake.py" select <source-name> --include "/guides/*" --include "/articles/*"
-```
-
-Do not collect a website until selection is saved. Default noise groups such as login, cart, tags, legal, contact, account, search, and author archives are visibly marked and unselected.
+### For Local Files (PDFs, Markdown, images, text):
+Local sources are selected automatically upon `start`. You may proceed directly to Step 3.
 
 ## 3. Collect only the selection
+
+Wait until the user confirms their selection is saved, then run:
 
 ```powershell
 uv run --project $env:INTAKE_HOME python "$env:INTAKE_HOME/scripts/intake.py" collect <source-name>

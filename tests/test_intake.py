@@ -111,6 +111,97 @@ class IntakeV2Tests(unittest.TestCase):
         self.assertFalse(inventory_group("https://example.com/upload/image.png")[1])
         self.assertFalse(inventory_group("https://example.com/צור-קשר")[1])
 
+    def test_server_port_fallback_and_lifecycle_endpoints(self) -> None:
+        import json
+        import threading
+        import time
+        import urllib.request
+        from intake import find_available_server, serve_report
+        from intake_engine import atomic_json, render_report
+
+        path = self.workspace / ".knowledge-intake" / "runs" / "test-site"
+        for folder in ("manifests", "reports", "prepared", "agent"):
+            (path / folder).mkdir(parents=True, exist_ok=True)
+        inventory = [
+            {"url": "https://example.com/a", "group": "a", "label": "a", "recommended": True, "selected": False, "status": "discovered"},
+        ]
+        write_jsonl(path / "inventory.jsonl", inventory)
+        atomic_json(path / "run.json", {"run_name": "test-site", "source": "https://example.com/", "source_kind": "website", "status": "discovered", "message": "Choose", "created_at": "x", "updated_at": "x", "inventory_count": 1, "selected_count": 0, "counts": {"found": 0, "cleaned": 0, "review": 0, "ready": 0, "excluded": 0}, "events": []})
+        atomic_json(path / "selection.json", {"saved_at": None, "urls": []})
+        render_report(path)
+
+        # Test port conflict auto-fallback
+        from http.server import SimpleHTTPRequestHandler
+        server1, port1 = find_available_server("127.0.0.1", 9870, SimpleHTTPRequestHandler)
+        self.assertEqual(port1, 9870)
+        server2, port2 = find_available_server("127.0.0.1", 9870, SimpleHTTPRequestHandler)
+        self.assertEqual(port2, 9871)
+        server1.server_close()
+        server2.server_close()
+
+        # Start server in thread
+        server_thread = threading.Thread(target=serve_report, args=(path, "127.0.0.1", 9880, False, 60), daemon=True)
+        server_thread.start()
+        time.sleep(0.4)
+
+        base_url = "http://127.0.0.1:9880"
+        # Test /api/run
+        with urllib.request.urlopen(f"{base_url}/api/run", timeout=2) as resp:
+            state = json.loads(resp.read().decode("utf-8"))
+            self.assertEqual(state["run_name"], "test-site")
+
+        # Test /api/heartbeat
+        req = urllib.request.Request(f"{base_url}/api/heartbeat", data=b'{"client_id": "test_tab_1"}', headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            hb = json.loads(resp.read().decode("utf-8"))
+            self.assertTrue(hb["ok"])
+
+        # Test /api/leave
+        req = urllib.request.Request(f"{base_url}/api/leave", data=b'{"client_id": "test_tab_1"}', headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            leave = json.loads(resp.read().decode("utf-8"))
+            self.assertTrue(leave["ok"])
+
+        # Test /api/select
+        req = urllib.request.Request(f"{base_url}/api/select", data=b'{"urls": ["https://example.com/a"]}', headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            sel = json.loads(resp.read().decode("utf-8"))
+            self.assertEqual(sel["selected_count"], 1)
+
+        # Test /api/shutdown
+        req = urllib.request.Request(f"{base_url}/api/shutdown", data=b"{}", headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            shut = json.loads(resp.read().decode("utf-8"))
+            self.assertTrue(shut["ok"])
+
+        server_thread.join(timeout=3)
+        self.assertFalse(server_thread.is_alive())
+
+    def test_server_idle_auto_shutdown(self) -> None:
+        import threading
+        import time
+        from intake import serve_report
+        from intake_engine import atomic_json, render_report
+
+        path = self.workspace / ".knowledge-intake" / "runs" / "idle-site"
+        for folder in ("manifests", "reports", "prepared", "agent"):
+            (path / folder).mkdir(parents=True, exist_ok=True)
+        write_jsonl(path / "inventory.jsonl", [])
+        atomic_json(path / "run.json", {"run_name": "idle-site", "source": "https://example.com/", "source_kind": "website", "status": "discovered", "message": "Choose", "created_at": "x", "updated_at": "x", "inventory_count": 0, "selected_count": 0, "counts": {"found": 0, "cleaned": 0, "review": 0, "ready": 0, "excluded": 0}, "events": []})
+        atomic_json(path / "selection.json", {"saved_at": None, "urls": []})
+        render_report(path)
+
+        # Start server with 1s idle timeout
+        start_time = time.time()
+        server_thread = threading.Thread(target=serve_report, args=(path, "127.0.0.1", 9890, False, 1), daemon=True)
+        server_thread.start()
+
+        # Wait for idle shutdown (should finish within ~3-4 seconds)
+        server_thread.join(timeout=5)
+        self.assertFalse(server_thread.is_alive())
+        elapsed = time.time() - start_time
+        self.assertLess(elapsed, 5)
+
 
 if __name__ == "__main__":
     unittest.main()

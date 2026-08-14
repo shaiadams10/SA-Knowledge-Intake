@@ -8,6 +8,8 @@
 
 > **Turn messy websites, HTML, PDFs, scans, and documents into clean, traceable, reviewable Markdown packages ready for Knowledge Bases and RAG retrieval.**
 
+![Knowledge Intake workflow preview](.github/assets/knowledge-intake-preview.png)
+
 Knowledge Intake is a portable, deterministic, and interactive intake pipeline designed for coding agents and human reviewers. It replaces unguided web scrapers and heavyweight local LLM extractors with a fast **Inventory-First** workflow, a **live proof-sheet dashboard** with OS-grade bulk selection, and targeted extraction.
 
 ---
@@ -46,6 +48,10 @@ flowchart TD
 ### 1. Setup
 
 ```powershell
+# Clone the canonical repository
+git clone https://github.com/shaiadams10/SA-Knowledge-Intake.git
+cd SA-Knowledge-Intake
+
 # Sync virtualenv and verify runtime
 uv sync
 uv run python scripts/intake.py doctor
@@ -89,8 +95,8 @@ Knowledge Intake is packaged as a **portable agent skill** compatible with Googl
 Run the installer pointing to your target project:
 
 ```powershell
-# Install into a specific project (.agents/skills/knowledge-intake)
-python scripts/install_skill.py D:\Projects\MyTargetProject
+# Install into the current project (.agents/skills/knowledge-intake)
+python scripts/install_skill.py .
 
 # Or install globally to user skills (~/.codex/skills or ~/.gemini/antigravity/skills)
 python scripts/install_skill.py --global
@@ -104,20 +110,20 @@ python scripts/install_skill.py --global
 Copy and paste this prompt to your coding agent:
 
 ```text
-Please install the Knowledge Intake skill into this project.
-Source repository: D:\Projects\KnowledgeIntake
-Run: python D:\Projects\KnowledgeIntake\scripts\install_skill.py .
-Then run `uv run python .agents/skills/knowledge-intake/scripts/intake.py doctor` to verify the installation and make sure the skill is available for intake commands.
+Please install the Knowledge Intake skill into the current project from its canonical repository:
+https://github.com/shaiadams10/SA-Knowledge-Intake
+
+Clone or download the repository into a temporary directory, run its `scripts/install_skill.py` with the current project root as the target, and then remove the temporary checkout. Finally, run `uv run python .agents/skills/knowledge-intake/scripts/intake.py doctor` from the project root to verify the installation and confirm that the skill is available for intake commands.
 ```
 
 #### 🔄 Prompt 2: Update Skill to Latest Version
 Copy and paste this prompt to check and update your installed skill:
 
 ```text
-Please check if our installed Knowledge Intake skill is up to date with the canonical repository at D:\Projects\KnowledgeIntake.
-Run: python D:\Projects\KnowledgeIntake\scripts\install_skill.py --check .
-If updates are available, run: python D:\Projects\KnowledgeIntake\scripts\install_skill.py .
-Then run the unit tests to confirm: uv run python -m unittest discover -s .agents/skills/knowledge-intake/tests -v
+Please check whether the Knowledge Intake skill installed in this project is up to date with its canonical repository:
+https://github.com/shaiadams10/SA-Knowledge-Intake
+
+Clone or download the latest repository into a temporary directory. Run its `scripts/install_skill.py --check` with the current project root as the target. If updates are available, run the same installer without `--check`. Remove the temporary checkout, then run `uv run python -m unittest discover -s .agents/skills/knowledge-intake/tests -v` from the project root to confirm the installation.
 ```
 
 #### 🎯 Prompt 3: Trigger Knowledge Intake
@@ -128,7 +134,7 @@ intake: https://docs.example.com
 ```
 *or for local documents:*
 ```text
-intake: D:\Documents\ProductManual.pdf
+intake: ./documents/ProductManual.pdf
 ```
 
 ---

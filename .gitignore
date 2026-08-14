@@ -1,6 +1,16 @@
 .venv/
+.agents/
 __pycache__/
 *.pyc
 .knowledge-intake/
 .impeccable/
 .pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+.DS_Store
+Thumbs.db

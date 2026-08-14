@@ -7,7 +7,9 @@ import json
 import os
 import re
 import shutil
+import sys
 import tempfile
+import time
 import unicodedata
 import urllib.parse
 import urllib.request
@@ -35,10 +37,10 @@ NOISE_SEGMENTS = {
     "מדיניות-פרטיות", "תקנון", "תקנון-שימוש", "צור-קשר", "התחברות", "הרשמה", "סל-קניות",
 }
 PROMO_RE = re.compile(
-    r"(?:buy now|shop now|subscribe|sign up|register now|book (?:a |your )?(?:call|session|consultation)|"
+    r"(?:\b(?:buy now|shop now|subscribe|sign up|register now|book (?:a |your )?(?:call|session|consultation)|"
     r"contact (?:us|sales)|call (?:us|now)|limited time|special offer|discount|coupon|free trial|"
     r"follow us|share (?:this|on)|download (?:our|the) (?:free|guide)|join (?:our|the) (?:newsletter|community)|"
-    r"קנו עכשיו|הירשמו|הרשמה|מבצע|הנחה|צרו קשר|עקבו אחרינו|שתפו|הצטרפו)", re.IGNORECASE,
+    r"קנו עכשיו|הירשמו|הרשמה|מבצע|הנחה|צרו קשר|עקבו אחרינו|שתפו|הצטרפו)\b)", re.IGNORECASE,
 )
 BYLINE_RE = re.compile(r"^(?:by|author|written by|reviewed by|posted by|מאת|נכתב על ידי|כותב(?:ת)?):?\s+.{2,100}$", re.IGNORECASE)
 CONTACT_RE = re.compile(
@@ -72,7 +74,14 @@ def atomic_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
     temp.write_text(text, encoding="utf-8", newline="\n")
-    os.replace(temp, path)
+    for attempt in range(10):
+        try:
+            os.replace(temp, path)
+            return
+        except OSError:
+            if attempt == 9:
+                raise
+            time.sleep(0.05 * (attempt + 1))
 
 
 def atomic_json(path: Path, value: Any) -> None:
@@ -471,6 +480,7 @@ def classify(locator: str, title: str, markdown: str, prepared_path: str, source
 async def crawl_selected(path: Path, urls: list[str], run: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     try:
         from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
+        from crawl4ai.async_dispatcher import MemoryAdaptiveDispatcher
         from crawl4ai.content_filter_strategy import PruningContentFilter
         from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
     except ImportError as exc:
@@ -483,9 +493,10 @@ async def crawl_selected(path: Path, urls: list[str], run: dict[str, Any]) -> tu
         markdown_generator=DefaultMarkdownGenerator(content_filter=PruningContentFilter(threshold=.45)),
         stream=True,
     )
+    dispatcher = MemoryAdaptiveDispatcher(max_session_permit=5)
     documents, evidence = [], []
     async with AsyncWebCrawler(config=browser) as crawler:
-        results = await crawler.arun_many(urls, config=config)
+        results = await crawler.arun_many(urls, config=config, dispatcher=dispatcher)
         async for result in results:
             index = len(documents) + 1
             url = clean_url(result.url or urls[min(index - 1, len(urls) - 1)])
@@ -506,8 +517,9 @@ async def crawl_selected(path: Path, urls: list[str], run: dict[str, Any]) -> tu
                 documents.append(classify(url, title, cleaned, prepared.relative_to(path).as_posix(), "website", [raw_path.relative_to(path).as_posix()]))
             run["counts"] = counts(documents)
             run["message"] = f"Read {index}/{len(urls)} selected pages."
-            run["events"].append({"at": now(), "stage": "collect", "message": run["message"]})
-            publish_progress(path, run)
+            if index % 10 == 0 or index == len(urls):
+                run["events"].append({"at": now(), "stage": "collect", "message": run["message"]})
+                publish_progress(path, run)
     return documents, evidence
 
 

@@ -635,7 +635,10 @@
                 <button class="button" id="btn-expand" title="Expand all section groups">Expand all</button>
                 <button class="button" id="btn-collapse" title="Collapse all section groups">Collapse all</button>
               </div>
-              <div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <button class="button" id="btn-shutdown" title="Stop the dashboard server and close session">
+                  <span>Close Server</span>
+                </button>
                 <button class="button primary" id="save">
                   <span id="save-text">Save selection</span>
                   <span class="tab-count" id="save-badge-count">0</span>
@@ -1356,6 +1359,50 @@
       state.groups.forEach(g => collapsedGroups.add(g.name));
     });
 
+    const clientId = 'tab_' + Math.random().toString(36).slice(2) + '_' + Date.now();
+
+    async function sendHeartbeat() {
+      try {
+        await fetch('/api/heartbeat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ client_id: clientId, visible: !document.hidden })
+        });
+      } catch (e) {
+        // Ignore heartbeat fetch errors
+      }
+    }
+
+    window.addEventListener('beforeunload', () => {
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon('/api/leave', JSON.stringify({ client_id: clientId }));
+      }
+    });
+
+    // Close Server
+    els('btn-shutdown').addEventListener('click', async () => {
+      if (!confirm('Stop the intake dashboard server? Your saved selections remain preserved in the run.')) {
+        return;
+      }
+      const note = els('save-note');
+      try {
+        await fetch('/api/shutdown', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ client_id: clientId })
+        });
+        note.textContent = 'Dashboard server stopped. You may now close this browser tab.';
+        note.className = 'notice success';
+        note.classList.remove('hidden');
+        els('btn-shutdown').disabled = true;
+        els('save').disabled = true;
+      } catch (error) {
+        note.textContent = 'Dashboard server is offline.';
+        note.className = 'notice';
+        note.classList.remove('hidden');
+      }
+    });
+
     // Save Selection
     els('save').addEventListener('click', async () => {
       const urls = Array.from(selectedUrls);
@@ -1387,6 +1434,8 @@
       }
     });
 
+    sendHeartbeat();
+    setInterval(sendHeartbeat, 15000);
     refresh();
     setInterval(refresh, 2500);
   </script>

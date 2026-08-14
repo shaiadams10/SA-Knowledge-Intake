@@ -46,5 +46,5 @@ Names inside informational content are preserved. Only labeled bylines, author c
 
 ## Live report
 
-`serve` runs a loopback-only standard-library HTTP server. The report polls `/api/run` for small status updates and posts selection to `/api/select`. It never sends source content to a remote service. Closing the server does not affect the run.
+`serve` runs a loopback-only standard-library HTTP server. The server automatically searches next free ports (8765 -> 8766+) if the initial port is busy. The report polls `/api/run` for small status updates, sends periodic heartbeats to `/api/heartbeat`, posts selection to `/api/select`, and signals `/api/leave` upon unload. It provides an explicit `/api/shutdown` endpoint and auto-closes after inactivity (default 900s). It never sends source content to a remote service. Closing the server does not affect the run.
 

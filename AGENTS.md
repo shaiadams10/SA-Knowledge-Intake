@@ -7,7 +7,7 @@ This folder is the canonical source of truth for the portable Knowledge Intake s
 - Sync dependencies: `uv sync`
 - Check runtime: `uv run python scripts/intake.py doctor --json`
 - Run tests: `uv run python -m unittest discover -s tests -v`
-- Validate skill metadata: `python C:\Users\shaib\.codex\skills\.system\skill-creator\scripts\quick_validate.py .`
+- Validate skill metadata: run the installed `skill-creator/scripts/quick_validate.py` against `.`
 - Install into a project: `python scripts/install_skill.py <project-root>`
 
 ## Boundaries
