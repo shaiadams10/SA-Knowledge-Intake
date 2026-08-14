@@ -16,7 +16,7 @@ from intake_engine import (
 
 
 def parser() -> argparse.ArgumentParser:
-    root = argparse.ArgumentParser(prog="knowledge-intake", description="Inventory first; collect selected information; build Dify-ready Markdown.")
+    root = argparse.ArgumentParser(prog="knowledge-intake", description="Inventory first; collect selected information; build clean Markdown knowledge packages.")
     root.add_argument("--workspace", default=".")
     commands = root.add_subparsers(dest="command", required=True)
     check = commands.add_parser("doctor")

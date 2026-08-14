@@ -1,4 +1,4 @@
 interface:
   display_name: "Knowledge Intake"
-  short_description: "Inventory sources and build clean Dify-ready packages"
-  default_prompt: "intake: Inventory this source, let me choose what matters, and build a clean Dify-ready package."
+  short_description: "Inventory sources and build clean Markdown knowledge packages"
+  default_prompt: "intake: Inventory this source, let me choose what matters, and build a clean Markdown knowledge package."

@@ -15,6 +15,5 @@ This folder is the canonical source of truth for the portable Knowledge Intake s
 - No local or cloud LLM runtime belongs in this project.
 - The current coding agent performs OCR/visual judgment through `agent/tasks.jsonl` and `agent/results.jsonl`.
 - Keep source evidence immutable, preserve factual meaning, and route uncertainty to review.
-- The package format is `dify-markdown-v1`, but this project never uploads to Dify.
+- The package format is `markdown-knowledge-v1` (structured single-H1 Markdown documents with SHA-256 manifests).
 - Use deterministic IDs, atomic writes, source-named runs, and bounded website inventory/crawls.
-

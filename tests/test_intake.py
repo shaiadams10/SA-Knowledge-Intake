@@ -32,7 +32,7 @@ class IntakeV2Tests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temp.cleanup()
 
-    def test_local_run_uses_source_name_and_builds_dify_package(self) -> None:
+    def test_local_run_uses_source_name_and_builds_knowledge_package(self) -> None:
         source = self.workspace / "Useful Guide.md"
         source.write_text(INFORMATION, encoding="utf-8")
         path, run = start(self.workspace, str(source))
@@ -44,7 +44,7 @@ class IntakeV2Tests(unittest.TestCase):
         target = package(path)
         result = validate(path)
         self.assertTrue(result["healthy"], result["errors"])
-        self.assertEqual(read_jsonl(target / "manifest.jsonl")[0]["schema_version"], "dify-markdown-document-v1")
+        self.assertEqual(read_jsonl(target / "manifest.jsonl")[0]["schema_version"], "markdown-document-v1")
 
     def test_cleanup_removes_byline_contact_and_promotion(self) -> None:
         dirty = INFORMATION + "\nBy: Example Person\nCall +1 212 555 0188\nSubscribe for a special offer\n"
@@ -103,7 +103,17 @@ class IntakeV2Tests(unittest.TestCase):
         self.assertEqual(applied["status"], "review")
         self.assertEqual(read_jsonl(path / "manifests" / "documents.jsonl")[0]["lane"], "sensitive_review")
 
+    def test_unicode_grouping_and_single_endpoint_consolidation(self) -> None:
+        from intake_engine import inventory_group, unicode_slug
+        self.assertEqual(unicode_slug("מאמרים"), "מאמרים")
+        self.assertEqual(inventory_group("https://example.com/מאמרים/5-דרכים")[0], "מאמרים")
+        self.assertTrue(inventory_group("https://example.com/מאמרים/5-דרכים")[1])
+        self.assertFalse(inventory_group("https://example.com/upload/image.png")[1])
+        self.assertFalse(inventory_group("https://example.com/צור-קשר")[1])
+
 
 if __name__ == "__main__":
     unittest.main()
+
+
 

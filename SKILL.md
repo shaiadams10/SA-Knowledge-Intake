@@ -1,11 +1,11 @@
 ---
 name: knowledge-intake
-description: Turn websites, HTML, Markdown, text, PDFs, scans, and images into a clean, traceable, reviewable Markdown package ready for Dify document upload. Always use when a user starts with `intake:` or invokes `$knowledge-intake`; also use for requests to inventory, crawl, select, clean, OCR, interpret, normalize, or prepare knowledge sources. The workflow inventories first, lets the user select relevant website sections in a live HTML report, collects only the selection, delegates uncertain reading to the current coding agent, and never uses or launches a local LLM.
+description: Turn websites, HTML, Markdown, text, PDFs, scans, and images into a clean, traceable, reviewable Markdown package ready for LLM knowledge bases and RAG retrieval. Always use when a user starts with `intake:` or invokes `$knowledge-intake`; also use for requests to inventory, crawl, select, clean, OCR, interpret, normalize, or prepare knowledge sources. The workflow inventories first, lets the user select relevant website sections in a live HTML report, collects only the selection, delegates uncertain reading to the current coding agent, and never uses or launches a local LLM.
 ---
 
 # Knowledge Intake
 
-Create a source-named intake folder containing evidence, a live report, a review queue, and a Dify-ready Markdown package. Use the current coding agent for judgment, OCR, and image interpretation when deterministic extraction is insufficient.
+Create a source-named intake folder containing evidence, a live report, a review queue, and a structured Markdown knowledge package. Use the current coding agent for judgment, OCR, and image interpretation when deterministic extraction is insufficient.
 
 ## Trigger
 
@@ -27,7 +27,7 @@ Set the canonical project or installed-skill directory as `INTAKE_HOME`, then ru
 uv run --project $env:INTAKE_HOME python "$env:INTAKE_HOME/scripts/intake.py" doctor
 ```
 
-If Crawl4AI's browser is missing, run the one setup command printed by `doctor`.
+If Crawl4AI's browser is missing, run the setup command printed by `doctor`.
 
 ## 2. Inventory first
 
@@ -59,7 +59,7 @@ Do not collect a website until selection is saved. Default noise groups such as 
 uv run --project $env:INTAKE_HOME python "$env:INTAKE_HOME/scripts/intake.py" collect <source-name>
 ```
 
-The collector runs selected web pages concurrently through Crawl4AI. Local Markdown/HTML/text is read directly. Text-bearing PDFs use deterministic PDF extraction. Scans and meaningful images enter the agent review queue instead of starting a model service.
+The collector runs selected web pages concurrently through Crawl4AI. Local Markdown/HTML/text is read directly. Text-bearing PDFs use deterministic PDF extraction. Scans and meaningful images enter the agent review queue instead of starting a local model service.
 
 ## 4. Handle the review queue as the current agent
 
@@ -83,13 +83,11 @@ uv run --project $env:INTAKE_HOME python "$env:INTAKE_HOME/scripts/intake.py" pa
 uv run --project $env:INTAKE_HOME python "$env:INTAKE_HOME/scripts/intake.py" validate <source-name>
 ```
 
-Hand off `.knowledge-intake/runs/<source-name>/package/`. Its contract is documented in `references/dify-output.md`:
+Hand off `.knowledge-intake/runs/<source-name>/package/`. Its contract is documented in `references/package-contract.md`:
 
-- `articles/*.md`: UTF-8, one H1, useful headings and paragraphs, no frontmatter, raw HTML, images, source branding, contacts, promotions, or diagnostics.
-- `manifest.jsonl`: one integrity row per Markdown document.
-- `package.json`: schema, run, counts, and Dify compatibility declaration.
-
-The skill prepares files but never uploads to or mutates Dify.
+- `articles/*.md`: UTF-8, one top-level H1, structured headings and paragraphs, no frontmatter, raw HTML, broken images, source branding, contacts, promotions, or diagnostics.
+- `manifest.jsonl`: one integrity row per Markdown document with SHA-256 digests.
+- `package.json`: schema, run details, counts, and compatibility declaration.
 
 ## Cleanup policy
 
@@ -103,5 +101,4 @@ Apply cleanup in this order:
 6. Preserve informational prose, headings, tables, units, citations, and names that are materially part of the information. Never erase a person's name merely because it is a name.
 7. Route ambiguous, scan-dependent, image-dependent, or sensitive claims to review rather than guessing.
 
-Read `references/protocol.md` for state and folder details, `references/analysis-result-schema.md` for agent results, and `references/dify-output.md` for the final contract.
-
+Read `references/protocol.md` for state and folder details, `references/analysis-result-schema.md` for agent results, and `references/package-contract.md` for the final package contract.

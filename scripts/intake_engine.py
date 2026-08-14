@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import tempfile
+import unicodedata
 import urllib.parse
 import urllib.request
 import uuid
@@ -30,6 +31,8 @@ SUPPORTED_SUFFIXES = {
 NOISE_SEGMENTS = {
     "account", "admin", "author", "authors", "cart", "checkout", "contact", "feed",
     "legal", "login", "privacy", "register", "search", "signin", "signup", "tag", "tags", "terms",
+    "upload", "uploads", "images", "image", "img", "assets", "static", "wp-content", "wp-includes",
+    "מדיניות-פרטיות", "תקנון", "תקנון-שימוש", "צור-קשר", "התחברות", "הרשמה", "סל-קניות",
 }
 PROMO_RE = re.compile(
     r"(?:buy now|shop now|subscribe|sign up|register now|book (?:a |your )?(?:call|session|consultation)|"
@@ -96,6 +99,14 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
 def slug(value: str, limit: int = 72) -> str:
     value = value.encode("ascii", "ignore").decode().lower()
     return re.sub(r"[^a-z0-9]+", "-", value).strip("-")[:limit].strip("-") or "source"
+
+
+def unicode_slug(value: str, limit: int = 72) -> str:
+    unquoted = urllib.parse.unquote(value or "").strip()
+    norm = unicodedata.normalize("NFKC", unquoted)
+    cleaned = re.sub(r"[^\w\s-]+", "-", norm, flags=re.UNICODE)
+    cleaned = re.sub(r"[\s_]+", "-", cleaned).strip("-").lower()
+    return cleaned[:limit].strip("-") or "general"
 
 
 def clean_url(url: str) -> str:
@@ -251,7 +262,8 @@ def sitemap_urls(root_url: str, limit: int) -> list[str]:
 
 
 def inventory_group(url: str) -> tuple[str, bool]:
-    segments = [slug(x) for x in urllib.parse.urlsplit(url).path.split("/") if x]
+    path = urllib.parse.unquote(urllib.parse.urlsplit(url).path)
+    segments = [unicode_slug(x) for x in path.split("/") if x]
     group = segments[0] if segments else "home"
     noisy = group in NOISE_SEGMENTS or any(segment in NOISE_SEGMENTS for segment in segments)
     return group, not noisy
@@ -283,7 +295,7 @@ def inventory_site(url: str, limit: int) -> list[dict[str, Any]]:
                     if not re.search(r"\.(?:zip|exe|dmg|mp4|mp3|mov|avi|css|js|woff2?)(?:$|\?)", parts.path, re.I):
                         queue.append(candidate)
         urls = list(seen)
-    cleaned = []
+    valid_candidates = []
     seen_urls: set[str] = set()
     for value in urls:
         candidate = clean_url(value)
@@ -293,11 +305,17 @@ def inventory_site(url: str, limit: int) -> list[dict[str, Any]]:
         seen_urls.add(candidate)
         group, recommended = inventory_group(candidate)
         label = urllib.parse.unquote(parts.path.strip("/").split("/")[-1] or origin_host).replace("-", " ").replace("_", " ")
-        cleaned.append({
+        valid_candidates.append({
             "url": candidate, "group": group, "label": label[:160], "recommended": recommended,
             "selected": False, "status": "discovered",
         })
-    return sorted(cleaned, key=lambda row: (row["group"], row["url"]))[:limit]
+
+    group_counts = Counter(row["group"] for row in valid_candidates)
+    for row in valid_candidates:
+        if group_counts[row["group"]] < 2:
+            row["group"] = "pages"
+
+    return sorted(valid_candidates, key=lambda row: (row["group"], row["url"]))[:limit]
 
 
 def start(workspace: Path, source: str, *, name: str | None = None, inventory_limit: int = DEFAULT_INVENTORY_LIMIT) -> tuple[Path, dict[str, Any]]:
@@ -611,7 +629,11 @@ def apply_agent(path: Path) -> dict[str, Any]:
         decision = result.get("decision", "review")
         confidence = float(result.get("confidence", 0))
         if result.get("status") == "completed" and decision == "include" and confidence >= .8:
-            cleaned = basic_clean(str(result.get("cleaned_markdown", "")), doc["title"])
+            cleaned_input = str(result.get("cleaned_markdown", ""))
+            first_h1 = re.search(r"(?m)^#\s+(.+)$", cleaned_input)
+            if first_h1:
+                doc["title"] = first_h1.group(1).strip()
+            cleaned = basic_clean(cleaned_input, doc["title"])
             if len(re.findall(r"\w+", cleaned, re.UNICODE)) < 45:
                 doc["lane"], doc["reasons"] = "needs_agent", ["Agent result is too fragmentary"]
                 continue
@@ -668,7 +690,7 @@ def package(path: Path) -> Path:
         filename = f"knowledge-{doc['public_id']}.md"
         atomic_text(articles / filename, content)
         manifest.append({
-            "schema_version": "dify-markdown-document-v1", "run_name": run["run_name"],
+            "schema_version": "markdown-document-v1", "run_name": run["run_name"],
             "document_id": doc["public_id"], "title": doc["title"], "language": doc["language"],
             "path": f"articles/{filename}", "sha256": content_hash,
             "word_count": len(re.findall(r"\w+", content, re.UNICODE)),
@@ -678,11 +700,11 @@ def package(path: Path) -> Path:
         shutil.rmtree(stage)
         raise ValueError("No ready documents are available to package. Resolve or exclude the review queue first.")
     atomic_json(stage / "package.json", {
-        "schema_version": "dify-markdown-package-v1", "profile": "dify-markdown-v1",
+        "schema_version": "markdown-package-v1", "profile": "markdown-knowledge-v1",
         "run_name": run["run_name"], "created_at": now(), "document_count": len(manifest),
-        "compatibility": ["dify-document-upload", "generic-rag"],
+        "compatibility": ["generic-rag", "knowledge-base", "vector-ingest"],
     })
-    atomic_text(stage / "README.md", "# Dify-ready knowledge package\n\nUpload the Markdown files in `articles/`. Use `manifest.jsonl` for integrity and idempotency. Review-only material and source evidence are intentionally outside this folder.\n")
+    atomic_text(stage / "README.md", "# Clean Markdown knowledge package\n\nUse the Markdown files in `articles/`. Use `manifest.jsonl` for integrity and idempotency. Review-only material and source evidence are intentionally outside this folder.\n")
     errors = [error for row in manifest for error in validate_markdown(stage / row["path"])]
     if errors:
         raise ValueError("Package failed cleanup:\n- " + "\n- ".join(errors))
@@ -692,7 +714,7 @@ def package(path: Path) -> Path:
         os.replace(target, archived)
     os.replace(stage, target)
     run["status"] = "packaged"
-    run["message"] = f"Package built with {len(manifest)} Dify-ready document(s)."
+    run["message"] = f"Package built with {len(manifest)} knowledge document(s)."
     run["events"].append({"at": now(), "stage": "package", "message": run["message"]})
     save_run(path, run)
     return target
@@ -721,7 +743,7 @@ def validate(path: Path) -> dict[str, Any]:
     atomic_json(path / "reports" / "validation.json", result)
     run = load_run(path)
     run["status"] = "validated" if not errors else "failed"
-    run["message"] = "The Dify-ready package passed validation." if not errors else f"Validation found {len(errors)} error(s)."
+    run["message"] = "The knowledge package passed validation." if not errors else f"Validation found {len(errors)} error(s)."
     save_run(path, run)
     return result
 
