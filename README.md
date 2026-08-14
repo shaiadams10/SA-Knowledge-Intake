@@ -104,26 +104,26 @@ python scripts/install_skill.py --global
 
 ---
 
-### 📋 Ready-to-Use Prompts for Your Coding Agent
+### 📋 Ready-to-Use Prompts for Any Coding Agent
 
 #### 📥 Prompt 1: Install Skill into Current Project
 Copy and paste this prompt to your coding agent:
 
 ```text
-Please install the Knowledge Intake skill into the current project from its canonical repository:
+Install the Knowledge Intake skill into this project's standard local skill directory from:
 https://github.com/shaiadams10/SA-Knowledge-Intake
 
-Clone or download the repository into a temporary directory, run its `scripts/install_skill.py` with the current project root as the target, and then remove the temporary checkout. Finally, run `uv run python .agents/skills/knowledge-intake/scripts/intake.py doctor` from the project root to verify the installation and confirm that the skill is available for intake commands.
+Use the repository's installer, then run the included `doctor` check to verify the installation.
 ```
 
 #### 🔄 Prompt 2: Update Skill to Latest Version
 Copy and paste this prompt to check and update your installed skill:
 
 ```text
-Please check whether the Knowledge Intake skill installed in this project is up to date with its canonical repository:
+Update the Knowledge Intake skill installed in this project to the latest version from:
 https://github.com/shaiadams10/SA-Knowledge-Intake
 
-Clone or download the latest repository into a temporary directory. Run its `scripts/install_skill.py --check` with the current project root as the target. If updates are available, run the same installer without `--check`. Remove the temporary checkout, then run `uv run python -m unittest discover -s .agents/skills/knowledge-intake/tests -v` from the project root to confirm the installation.
+Use the repository's installer, then run the included `doctor` check to verify the update.
 ```
 
 #### 🎯 Prompt 3: Trigger Knowledge Intake
