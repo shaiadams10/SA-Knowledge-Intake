@@ -56,6 +56,12 @@ SENSITIVE_RE = re.compile(
     r"\b(?:diagnos(?:is|e)|treat(?:ment|s|ed)?|cure[sd]?|prescription|dosage|contraindicat|pregnan|disease|syndrome|injur|medication)\b|"
     r"(?:אבחון|טיפול|מרשם|מינון|תרופה|מחלה|פציעה|הריון)", re.IGNORECASE,
 )
+HEBREW_FILENAME_TRANSLITERATION = str.maketrans({
+    "א": "a", "ב": "b", "ג": "g", "ד": "d", "ה": "h", "ו": "v", "ז": "z", "ח": "h",
+    "ט": "t", "י": "y", "כ": "k", "ך": "k", "ל": "l", "מ": "m", "ם": "m", "נ": "n",
+    "ן": "n", "ס": "s", "ע": "a", "פ": "p", "ף": "f", "צ": "ts", "ץ": "ts", "ק": "k",
+    "ר": "r", "ש": "sh", "ת": "t",
+})
 
 
 def now() -> str:
@@ -120,7 +126,7 @@ def unicode_slug(value: str, limit: int = 72) -> str:
 
 def portable_article_slug(value: str, limit: int = 80) -> str:
     """Return a readable ASCII filename stem that is safe across platforms."""
-    normalized = unicodedata.normalize("NFKD", value or "")
+    normalized = unicodedata.normalize("NFKD", (value or "").translate(HEBREW_FILENAME_TRANSLITERATION))
     ascii_value = normalized.encode("ascii", "ignore").decode("ascii").lower()
     cleaned = re.sub(r"[^a-z0-9]+", "-", ascii_value).strip("-")
     return cleaned[:limit].rstrip("-") or "knowledge"

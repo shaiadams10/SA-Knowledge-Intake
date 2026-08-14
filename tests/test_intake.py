@@ -52,7 +52,8 @@ class IntakeV2Tests(unittest.TestCase):
     def test_portable_article_slug_is_ascii_readable_and_has_safe_fallback(self) -> None:
         self.assertEqual(portable_article_slug("Plant vs. Animal Protein"), "plant-vs-animal-protein")
         self.assertEqual(portable_article_slug("Crème brûlée: a guide"), "creme-brulee-a-guide")
-        self.assertEqual(portable_article_slug("חלבונים מהצומח"), "knowledge")
+        self.assertEqual(portable_article_slug("חלבונים מהצומח"), "hlbvnym-mhtsvmh")
+        self.assertEqual(portable_article_slug("日本語"), "knowledge")
 
     def test_cleanup_removes_byline_contact_and_promotion(self) -> None:
         dirty = INFORMATION + "\nBy: Example Person\nCall +1 212 555 0188\nSubscribe for a special offer\n"
